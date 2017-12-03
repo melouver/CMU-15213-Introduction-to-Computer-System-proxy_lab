@@ -5,11 +5,11 @@
 #define MAX_CACHE_SIZE 1049000
 #define MAX_OBJECT_SIZE 102400
 
-void doit(int fd);
+void* doit(void* arg);
 
 /* You won't lose style points for including this long line in your code */
 static const char *user_agent_hdr = "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3\r\n";
-
+#define ThreadCnt 10
 int main(int argc, char **argv)
 {
   if (argc != 2) {
@@ -20,18 +20,23 @@ int main(int argc, char **argv)
   char hostname[MAXLINE], port[MAXLINE];
   socklen_t clientlen;
   struct sockaddr_storage clientaddr;
-
+  int *thread_argp = NULL;
   listenfd = Open_listenfd(argv[1]);
+  pthread_t pids[ThreadCnt] = {0};
+  int next_pid = 0;
   while (1) {
     clientlen = sizeof(clientaddr);
     connfd = Accept(listenfd, (SA*)&clientaddr, &clientlen);
+    thread_argp = (int*)Malloc(sizeof(int));
+    *thread_argp = connfd;
     Getnameinfo((SA*)&clientaddr, clientlen, hostname, MAXLINE, port, MAXLINE, 0);
     printf("Accepted connection from (%s, %s)\n", hostname, port);
-    doit(connfd);
-    Close(connfd);
+    pthread_create(&pids[next_pid++], NULL, doit, thread_argp);
+
   }
   return 0;
 }
+
 static void constructHDR(int clifd, char *Request, char *host, char *port) {
   rio_t toCliRio;
   Rio_readinitb(&toCliRio, clifd);
@@ -71,8 +76,8 @@ static void constructHDR(int clifd, char *Request, char *host, char *port) {
     Rio_readlineb(&toCliRio, buf, MAXLINE);
     if (!strstr(buf, "Host")
         && !strstr(buf, "Connection")
-        && !strstr(buf, "Proxy-Connection")
-        && !strstr(buf, "User-Agent")) {
+        && !strstr(buf, "Proxy-Connection") 
+       && !strstr(buf, "User-Agent")) {
       printf("other hdr : %s ", buf);
       sprintf(Request, "%s%s", Request, buf);
     }
@@ -84,14 +89,18 @@ static void constructHDR(int clifd, char *Request, char *host, char *port) {
 }
 
 
-void doit(int clifd) {
- 
+void*
+doit(void* arg) {
+  pthread_detach(pthread_self());
+  int clifd = *(int*)arg;
+  free(arg);
   char Request[MAXLINE], host[MAXLINE], port[MAXLINE], buf[MAXLINE];
   
   constructHDR(clifd, Request, host, port);
 
   int toServFd;
   // open connection with server
+  printf("host: %s port: %s\n", host, port);
   if ((toServFd = open_clientfd(host, port)) < 0) {
     fprintf(stderr, "Error");
     exit(-1);
@@ -132,13 +141,8 @@ void doit(int clifd) {
     DataSize -= n;
   }
   printf("remain size: %d \n", DataSize);
-  
-  
-  
-  
-  
-  
-  
+  Close(clifd);
+  return NULL;
 }
 
  
