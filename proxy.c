@@ -8,7 +8,7 @@
 void doit(int fd);
 
 /* You won't lose style points for including this long line in your code */
-//static const char *user_agent_hdr = "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3\r\n";
+static const char *user_agent_hdr = "User-Agent: Mozilla/5.0 (X11; Linux x86_64; rv:10.0.3) Gecko/20120305 Firefox/10.0.3\r\n";
 
 int main(int argc, char **argv)
 {
@@ -32,75 +32,106 @@ int main(int argc, char **argv)
   }
   return 0;
 }
-
-void doit(int clifd) {
-  //goto test;
-  rio_t toCli;
-  Rio_readinitb(&toCli, clifd);
+static void constructHDR(int clifd, char *Request, char *host, char *port) {
+  rio_t toCliRio;
+  Rio_readinitb(&toCliRio, clifd);
 
   char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
-  if (!Rio_readlineb(&toCli, buf,MAXLINE)) {
+  if (!Rio_readlineb(&toCliRio, buf,MAXLINE)) {
     return;
   }
-  printf("REQUEST: %s\n", buf);
+  
+  printf("REQUEST line: %s\n", buf);
   sscanf(buf, "%s %s %s", method, uri, version);
-
   if (strcasecmp(method, "GET")) {
     return;
   }
- 
-  char Request[MAXLINE], host[MAXLINE], port[MAXLINE];
-  
+
   char *fileP = strstr(uri+7, "/");
   printf("uri: %s file: %s\n", uri, fileP);
   *fileP = '\0';
+  char *simicol = strstr(uri+7, ":");
+  sprintf(port, "80");
+  if (simicol) {
+    *simicol = '\0';
+    sprintf(port, "%s", simicol+1);
+  }
   sprintf(host, "%s", uri+7);
+  printf("host: %s port: %s\n", host, port);
+  // get optional port;
   *fileP = '/';
-  sprintf(port, "10000");
-  ///cgi-bin/adder?1&2
-  sprintf(host, "127.0.0.1");
-  sprintf(Request, "GET %s HTTP/1.0\r\n\r\n", fileP);
-  int clientfd;
   
-  if ((clientfd = open_clientfd(host, port)) < 0) {
+
+  sprintf(Request, "GET %s HTTP/1.0\r\n", fileP);
+  sprintf(Request, "%sHost: %s\r\n", Request, host);
+  sprintf(Request, "%sConnection: close\r\n", Request);
+  sprintf(Request, "%sProxy-Connection: close\r\n", Request);
+  sprintf(Request, "%s%s", Request, user_agent_hdr);
+  while (strcmp(buf, "\r\n")) {
+    Rio_readlineb(&toCliRio, buf, MAXLINE);
+    if (!strstr(buf, "Host")
+        && !strstr(buf, "Connection")
+        && !strstr(buf, "Proxy-Connection")
+        && !strstr(buf, "User-Agent")) {
+      printf("other hdr : %s ", buf);
+      sprintf(Request, "%s%s", Request, buf);
+    }
+  }
+  
+  
+  sprintf(Request, "%s\r\n", Request);
+  printf("return response : %s", Request);
+}
+
+
+void doit(int clifd) {
+ 
+  char Request[MAXLINE], host[MAXLINE], port[MAXLINE], buf[MAXLINE];
+  
+  constructHDR(clifd, Request, host, port);
+
+  int toServFd;
+  // open connection with server
+  if ((toServFd = open_clientfd(host, port)) < 0) {
     fprintf(stderr, "Error");
     exit(-1);
   }
-  rio_t toServ;
-  Rio_readinitb(&toServ, clientfd);
-  
-  if (rio_writen(clientfd, Request, strlen(Request)) < 0) {
+  rio_t toServRio;
+  Rio_readinitb(&toServRio, toServFd);
+  // send request
+  if (rio_writen(toServFd, Request, strlen(Request)) < 0) {
     fprintf(stderr, "Error writing to server\n");
   }
   char tmp[MAXLINE] = {0};
-  int size = 0;
-  while (rio_readlineb(&toServ, buf, MAXLINE) > 0) {
+  int DataSize = 0;
+  //read response header
+  while (rio_readlineb(&toServRio, buf, MAXLINE) > 0) {
     sprintf(tmp, "%s%s", tmp, buf);
-    printf("--%s", buf);
     if (!strcasecmp(buf, "\r\n")) {
       break;
     }
     char *contentP = NULL;
     contentP = strstr(buf, "Content-length");
     if (contentP) {
-      sscanf(contentP+strlen("Content-length")+1, "%d", &size);
+      sscanf(contentP+strlen("Content-length")+1, "%d", &DataSize);
     }
   }
-  printf("size: %d \n", size);
+  printf("size: %d \n", DataSize);
   rio_writen(clifd, tmp, strlen(tmp));
   
   memset(tmp, 0, MAXLINE);
-  ssize_t n;
-  while (size > 0) {
-    n = Rio_readnb(&toServ, buf, MAXLINE);
+  // read content
+  while (DataSize > 0) {
+    ssize_t n;
+    n = Rio_readnb(&toServRio, buf, MAXLINE);
     printf("n: %lu\n", n);
     if (n <= 0) {
       break;
     }
     Rio_writen(clifd, buf, n);
-    size -= n;
+    DataSize -= n;
   }
-  printf("remain size: %d \n", size);
+  printf("remain size: %d \n", DataSize);
   
   
   
