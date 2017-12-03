@@ -29,13 +29,12 @@ int main(int argc, char **argv)
     printf("Accepted connection from (%s, %s)\n", hostname, port);
     doit(connfd);
     Close(connfd);
-    return 0;
-
   }
   return 0;
 }
 
 void doit(int clifd) {
+  //goto test;
   rio_t toCli;
   Rio_readinitb(&toCli, clifd);
 
@@ -54,10 +53,13 @@ void doit(int clifd) {
   
   char *fileP = strstr(uri+7, "/");
   printf("uri: %s file: %s\n", uri, fileP);
-  sprintf(host, "127.0.0.1");
+  *fileP = '\0';
+  sprintf(host, "%s", uri+7);
+  *fileP = '/';
   sprintf(port, "10000");
-  
-  sprintf(Request, "GET /cgi-bin/adder?1&2 HTTP/1.0\r\n\r\n");
+  ///cgi-bin/adder?1&2
+  sprintf(host, "127.0.0.1");
+  sprintf(Request, "GET %s HTTP/1.0\r\n\r\n", fileP);
   int clientfd;
   
   if ((clientfd = open_clientfd(host, port)) < 0) {
@@ -71,11 +73,34 @@ void doit(int clifd) {
     fprintf(stderr, "Error writing to server\n");
   }
   char tmp[MAXLINE] = {0};
+  int size = 0;
   while (rio_readlineb(&toServ, buf, MAXLINE) > 0) {
     sprintf(tmp, "%s%s", tmp, buf);
-    printf("%s", buf);
+    printf("--%s", buf);
+    if (!strcasecmp(buf, "\r\n")) {
+      break;
+    }
+    char *contentP = NULL;
+    contentP = strstr(buf, "Content-length");
+    if (contentP) {
+      sscanf(contentP+strlen("Content-length")+1, "%d", &size);
+    }
   }
+  printf("size: %d \n", size);
   rio_writen(clifd, tmp, strlen(tmp));
+  
+  memset(tmp, 0, MAXLINE);
+  ssize_t n;
+  while (size > 0) {
+    n = Rio_readnb(&toServ, buf, MAXLINE);
+    printf("n: %lu\n", n);
+    if (n <= 0) {
+      break;
+    }
+    Rio_writen(clifd, buf, n);
+    size -= n;
+  }
+  printf("remain size: %d \n", size);
   
   
   
@@ -85,3 +110,4 @@ void doit(int clifd) {
   
 }
 
+ 
