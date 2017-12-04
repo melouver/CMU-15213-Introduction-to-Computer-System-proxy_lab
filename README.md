@@ -1,2 +1,5 @@
 # proxy_lab
-# This lab is far from finished!!!!!
+# Cache eviction policy
+FIFO
+
+# Sorry, I can't do it with LRU.Any advice are appreciated,thx!
