@@ -1,6 +1,7 @@
 # proxy_lab
 ## Cache eviction policy
-FIFO
+
+LIFO
 
 ## Sorry, I can't do it with LRU. So Any advice would be greatly appreciated
 
