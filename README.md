@@ -1,9 +1,8 @@
-# proxy_lab
+# solution to the CMU 15213: Introduction to Computer Systems (ICS) proxy_lab
 ## Cache eviction policy
-
 LIFO
 
-## Sorry, I can't do it with LRU. So Any advice would be greatly appreciated
 
-这是我对于CSAPP最后一个实验proxy lab的代码实现。实现方法较为粗糙。连接管理方式为one thread per connection，并没有实现线程池。
-缓存的更新策略是FIFO而不是LRU或者CLOCK(second chance)，原因在于我认为如果要在多线程模型下实现LRU的每个bookkeeping操作，那么这会退化成普通的FIFO。因为LRU对于读者需要记录读取时间，这个时间可以是逻辑时间（counter)，也可以是physical time，但无论如何，对于读者仍然有写操作，和写者没有本质区别。很显然，我对(高)并发的理解太粗浅了，所以只实现了个demo。proxy是一个极其重要的middleware，我还需要学习一个。
+This is my implementation of the last project in CSAPP, the proxy lab. The implementation method is relatively rough. The connection management approach is one thread per connection.
+
+The cache update strategy is FIFO instead of LRU or CLOCK (second chance). The reason for this is that I believe that if we want to implement LRU with every bookkeeping operation in a multi-threaded model, it would degrade to a regular FIFO. This is because LRU requires recording the access time for readers, which can be either logical time (counter) or physical time. However, regardless of the approach, readers still have write operations, which are essentially the same as writers.
